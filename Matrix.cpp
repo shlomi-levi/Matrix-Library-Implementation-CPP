@@ -2,11 +2,12 @@
 #include <stdexcept>
 
 Matrix::Matrix(std::vector<std::vector<double>> input) {
-	int rows = input.size();
+	int rows = static_cast<int>(input.size());
+	
 	if(!rows)
 		throw std::invalid_argument("Enclosing list is empty. cannot create matrix with 0 rows.");
 
-	int cols = input.at(0).size();
+	int cols = static_cast<int>(input.at(0).size());
 
 	if(!cols)
 		throw std::invalid_argument("First list contains 0 elements. cannot create matrix with 0 columns");
@@ -14,7 +15,7 @@ Matrix::Matrix(std::vector<std::vector<double>> input) {
 	// Make sure all the rows have the same amount of columns:
 	for(int i = 1; i < rows; i++) {
 		if(input.at(i).size() != cols)
-			throw std::invalid_argument("All of the lists inside the enclosing list must have the same amount of elements, since each row in a matrix has the same number of columns");
+			throw std::invalid_argument("All of the lists inside the enclosing list must have the same amount of elements, since all rows in a matrix have the same number of columns");
 	}
 
 	m_matrixData = new double[rows * cols];
@@ -51,7 +52,10 @@ Matrix::Matrix(const Matrix& other) {
 	std::copy(&other.m_matrixData[0], &other.m_matrixData[other.m_numOfCols], m_matrixData);
 }
 
-Matrix::Matrix(Matrix&& other) {
+Matrix::Matrix(Matrix&& other) noexcept {
+	if(m_matrixData != nullptr)
+		delete[] m_matrixData;
+
 	m_matrixData = other.m_matrixData;
 	m_numOfRows = other.m_numOfRows;
 	m_numOfCols = other.m_numOfCols;
@@ -133,29 +137,68 @@ Matrix Matrix::operator* (const double scalar) const {
 	return res;
 }
 
-Matrix Matrix::operator[] (const int row) const { };
+Matrix Matrix::eliminate(bool isHomogenous=true) const {
+	Matrix res {(*this)};
+	
+	int nextRowPlacement = 0;
+	int columnsRange = isHomogenous ? res.m_numOfCols : res.m_numOfCols - 1;
 
-Matrix Matrix::eliminate() const { };
+	// Get row echolon form ("level" matrix):
+	int maxOpeningElements = std::min( static_cast<int>(res.m_numOfRows), columnsRange);
+
+	for(int j = 0 ; j < maxOpeningElements ; j++) {
+		for(int i = nextRowPlacement ; i < res.m_numOfRows ; i++) {
+			if(!res.m_matrixData[index(i, j)])
+				continue;
+
+			double inverse = 1 / res.m_matrixData[index(i, j)];
+
+			res.multiplyRow(i, inverse);
+
+			if(i != nextRowPlacement)
+				res.swapRows(i, nextRowPlacement);
+			
+			for(int k = nextRowPlacement + 1 ; k < m_numOfRows ; k++) {
+				if(!m_matrixData[index(k, j)])
+					continue;
+
+				double multiple = res.m_matrixData[index(k,j)];
+
+				res.addOrSubtractMultipleOfDiffRow(k, nextRowPlacement, multiple, OP::SUBTRACT);
+
+				nextRowPlacement += 1;
+			}
+		}
+	}
+
+	// Get reduced echolon form(row canonical form):
+	for(int i = nextRowPlacement - 1; i >= 0; i--) {
+		for(int j = 0 ; j < columnsRange ; j++) {
+			if(res.m_matrixData[index(i, j)] != 1)
+				continue;
+
+			for(int k = i - 1 ; k >=0 ; k--) {
+				if(res.m_matrixData[index(k, j)] != 0) {
+					double multiple = res.m_matrixData[index(k, j)];
+					res.addOrSubtractMultipleOfDiffRow(k, i, multiple, OP::SUBTRACT);
+				}
+			}
+			break;
+		}
+	}
+	return res;
+}
 
 Matrix& Matrix::transpose() {
-	if(m_numOfRows != m_numOfCols)
-		throw std::invalid_argument("Only a squared matrix can be transposed");
-
-
 	for(int i = 1 ; i < m_numOfRows ; i++) {
 		for(int j = i + 1 ; j < m_numOfCols ; j++) { 
-			double temp = m_matrixData[index(i, j)];
-
-			m_matrixData[index(i, j)] = m_matrixData[index(j, i)];
-			m_matrixData[index(j, i)] = temp;
+			std::swap(m_matrixData[index(i, j)], m_matrixData[index(j, i)]);
 		}
 	}
 	return (*this);
 }
 
 Matrix Matrix::transposed() const {
-	if(m_numOfRows != m_numOfCols)
-		throw std::invalid_argument("Only a squared matrix can be transposed");
 
 	Matrix res {(*this)};
 	res.transpose();
@@ -163,7 +206,28 @@ Matrix Matrix::transposed() const {
 	return res;
 };
 
-void Matrix::swapRows(const int row1, const int row2) { };
+void Matrix::swapRows(const int row1, const int row2) {
+	for(int j = 0 ; j < m_numOfCols ; j++)
+		std::swap(m_matrixData[index(row1, j)], m_matrixData[index(row2, j)]);
+};
+
+void Matrix::multiplyRow(int rowNum, double val) {
+	for(int j = 0; j < m_numOfCols; j++)
+		m_matrixData[index(rowNum, j)] *= val;
+}
+
+void Matrix::addOrSubtractMultipleOfDiffRow(const int dstRow, const int srcRow, const double multiple, const enum OP operation) {
+	double valueToAdd = 0;
+
+	for(int j = 0 ; j < m_numOfCols ; j++) {
+		valueToAdd = m_matrixData[index(srcRow, j)] * multiple;
+		
+		if(operation == OP::SUBTRACT)
+			valueToAdd *= -1;
+
+		m_matrixData[index(dstRow, j)] += valueToAdd; 
+	}
+}
 
 int Matrix::index(const int row, const int col) const {
 	return (row * m_numOfCols) + col;
