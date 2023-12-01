@@ -30,14 +30,6 @@ Matrix::Matrix(std::vector<std::vector<double>> input) {
 	}
 }
 
-Matrix::Matrix(double** values, int rows, int cols) {
-	m_matrixData = new double[rows * cols];
-
-	for(int i = 0 ; i < rows ; i++)
-		for(int j = 0 ; j < cols ; j++)
-			m_matrixData[index(i, j)] = values[i][j];
-}
-
 Matrix::Matrix(int rows, int cols) : m_numOfRows(rows), m_numOfCols(cols) {
 	m_matrixData = new double[rows * cols];
 	std::fill_n(m_matrixData, rows * cols, 0.0);
@@ -49,7 +41,7 @@ Matrix::Matrix(const Matrix& other) {
 	m_numOfRows = other.m_numOfRows;
 	m_numOfCols = other.m_numOfCols;
 
-	std::copy(&other.m_matrixData[0], &other.m_matrixData[other.m_numOfCols], m_matrixData);
+	std::copy(&other.m_matrixData[0], &other.m_matrixData[other.m_numOfRows * other.m_numOfCols], m_matrixData);
 }
 
 Matrix::Matrix(Matrix&& other) noexcept {
@@ -68,6 +60,8 @@ Matrix::~Matrix() {
 }
 
 void swap(Matrix& m1, Matrix& m2) {
+	int k = m1.m_numOfRows;
+
 	std::swap(m1.m_numOfRows, m2.m_numOfRows);
 	std::swap(m1.m_numOfCols, m2.m_numOfCols);
 	std::swap(m1.m_matrixData, m2.m_matrixData);
@@ -137,7 +131,7 @@ Matrix Matrix::operator* (const double scalar) const {
 	return res;
 }
 
-Matrix Matrix::eliminate(bool isHomogenous=true) const {
+Matrix Matrix::eliminate(bool isHomogenous) const {
 	Matrix res {(*this)};
 	
 	int nextRowPlacement = 0;
@@ -190,17 +184,22 @@ Matrix Matrix::eliminate(bool isHomogenous=true) const {
 }
 
 Matrix& Matrix::transpose() {
-	for(int i = 1 ; i < m_numOfRows ; i++) {
-		for(int j = i + 1 ; j < m_numOfCols ; j++) { 
-			std::swap(m_matrixData[index(i, j)], m_matrixData[index(j, i)]);
+	Matrix res {m_numOfCols, m_numOfRows};
+
+	for(int i = 0 ; i < res.m_numOfRows ; i++) { 
+		for(int j = 0 ; j < res.m_numOfCols ; j++) {
+			res.m_matrixData[res.index(i,j)] = m_matrixData[index(j,i)];
 		}
 	}
+
+	swap(*this, res);
+
 	return (*this);
 }
 
 Matrix Matrix::transposed() const {
-
 	Matrix res {(*this)};
+
 	res.transpose();
 
 	return res;
@@ -214,6 +213,17 @@ void Matrix::swapRows(const int row1, const int row2) {
 void Matrix::multiplyRow(int rowNum, double val) {
 	for(int j = 0; j < m_numOfCols; j++)
 		m_matrixData[index(rowNum, j)] *= val;
+}
+
+std::ostream& operator<<(std::ostream& os, const Matrix& mat) {
+	for(int i = 0 ; i < mat.m_numOfRows ; i++) {
+		for(int j = 0 ; j < mat.m_numOfCols; j++) {
+			os << mat.m_matrixData[mat.index(i, j)] << "  ";
+		}
+		os << "\n";
+	}
+	return os;
+
 }
 
 void Matrix::addOrSubtractMultipleOfDiffRow(const int dstRow, const int srcRow, const double multiple, const enum OP operation) {
